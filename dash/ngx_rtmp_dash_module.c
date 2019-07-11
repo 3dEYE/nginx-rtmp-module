@@ -1139,7 +1139,13 @@ ngx_rtmp_dash_publish(ngx_rtmp_session_t *s, ngx_rtmp_publish_t *v)
                    "dash: playlist='%V' playlist_bak='%V' stream_pattern='%V'",
                    &ctx->playlist, &ctx->playlist_bak, &ctx->stream);
 
-    ctx->start_time = *ngx_cached_time;
+    if(s->flv_start_time_ms == 0)
+      ctx->start_time = *ngx_cached_time;
+    else {
+      ctx->start_time.sec = s->flv_start_time_ms / 1000;
+      ctx->start_time.msec = s->flv_start_time_ms - ctx->start_time.sec * 1000;
+      ctx->start_time.gmtoff = ngx_cached_time->gmtoff;
+    }
 
     if (ngx_rtmp_dash_ensure_directory(s) != NGX_OK) {
         return NGX_ERROR;

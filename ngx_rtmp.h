@@ -230,6 +230,7 @@ typedef struct {
     ngx_msec_t              peer_epoch;
     ngx_msec_t              base_time;
     uint32_t                current_time;
+    int64_t                 flv_start_time_ms;
 
     /* ready for publishing? */
     unsigned                ready_for_publish:1;

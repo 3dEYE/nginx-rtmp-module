@@ -85,6 +85,23 @@ ngx_module_t  ngx_rtmp_flv_module = {
     NGX_MODULE_V1_PADDING
 };
 
+static int64_t parse_iso8601_timestamp(char *timestamp_str)
+{
+      int y,M,d,h,m;
+      float sec;
+      sscanf(timestamp_str, "%d-%d-%dT%d:%d:%fZ", &y, &M, &d, &h, &m, &sec);
+
+      struct tm time;
+      time.tm_year = y - 1900;
+      time.tm_mon = M - 1;
+      time.tm_mday = d;
+      time.tm_hour = h;
+      time.tm_min = m;
+      time.tm_sec = (int)sec;
+
+      int64_t epoch_sec = timegm(&time);
+      return epoch_sec * 1000 + (int)sec * 1000 - time.tm_sec * 1000;
+}
 
 static ngx_int_t
 ngx_rtmp_flv_fill_index(ngx_rtmp_amf_ctx_t *ctx, ngx_rtmp_flv_index_t *idx)
@@ -119,7 +136,13 @@ ngx_rtmp_flv_init_index(ngx_rtmp_session_t *s, ngx_chain_t *in)
     static ngx_rtmp_amf_ctx_t       filepositions_ctx;
     static ngx_rtmp_amf_ctx_t       times_ctx;
 
+    static char                     create_timestamp[128];
+
     static ngx_rtmp_amf_elt_t       in_keyframes[] = {
+
+        { NGX_RTMP_AMF_STRING | NGX_RTMP_AMF_CONTEXT,
+          ngx_string("creation_time"),
+          &create_timestamp, sizeof(create_timestamp) },
 
         { NGX_RTMP_AMF_ARRAY | NGX_RTMP_AMF_CONTEXT,
           ngx_string("filepositions"),
@@ -159,6 +182,7 @@ ngx_rtmp_flv_init_index(ngx_rtmp_session_t *s, ngx_chain_t *in)
 
     ngx_memzero(&filepositions_ctx, sizeof(filepositions_ctx));
     ngx_memzero(&times_ctx, sizeof(times_ctx));
+    ngx_memzero(&create_timestamp, sizeof(create_timestamp));
 
     if (ngx_rtmp_receive_amf(s, in, in_elts,
                              sizeof(in_elts) / sizeof(in_elts[0])))
@@ -193,6 +217,14 @@ ngx_rtmp_flv_init_index(ngx_rtmp_session_t *s, ngx_chain_t *in)
     ngx_log_debug2(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
                   "flv: times nelts=%ui offset=%ui",
                    ctx->times.nelts, ctx->times.offset);
+
+    if(ngx_strlen(create_timestamp) != 0)
+      s->flv_start_time_ms = parse_iso8601_timestamp(create_timestamp);
+    else
+      s->flv_start_time_ms = 0;
+
+    ngx_log_debug1(NGX_LOG_DEBUG_RTMP, s->connection->log, 0,
+                  "flv: create_timestamp=%L", s->flv_start_time_ms);
 
     return  NGX_OK;
 }
